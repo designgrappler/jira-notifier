@@ -1,0 +1,11 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- White background -->
+  <rect width="1024" height="1024" fill="white"/>
+  <!-- Solid Jira logo: 24x24 viewBox scaled to ~680px, centered (offset 172) -->
+  <g transform="translate(172, 172) scale(28.33)">
+    <path fill="black" d="M11.53,2a4.37,4.37,0,0,0,4.35,4.35h1.78v1.7A4.35,4.35,0,0,0,22,12.4V2.84A.85.85,0,0,0,21.16,2H11.53 M6.77,6.8a4.36,4.36,0,0,0,4.34,4.34h1.8v1.72a4.36,4.36,0,0,0,4.34,4.34V7.63a.84.84,0,0,0-.83-.83H6.77 M2,11.6a4.34,4.34,0,0,0,4.35,4.34H8.13v1.72A4.36,4.36,0,0,0,12.47,22V12.43a.85.85,0,0,0-.84-.84H2Z"/>
+  </g>
+  <!-- Activity dot: white ring + black fill (lower-right corner) -->
+  <circle cx="835" cy="323" r="111" fill="white"/>
+  <circle cx="835" cy="323" r="68" fill="black"/>
+</svg>
