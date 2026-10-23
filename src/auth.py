@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OAuth 2.1 PKCE authentication and token management for SAP Jira (jira.tools.sap).
+OAuth 2.1 PKCE authentication and token management for self-hosted Jira Server.
 Tokens are stored encrypted in the macOS Keychain.
 """
 
@@ -15,13 +15,35 @@ import urllib.request
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-KEYCHAIN_SERVICE = "com.sap.jira-notifier"
+KEYCHAIN_SERVICE = "io.github.jiraservernotifier"
 KEYCHAIN_ACCOUNT = "oauth_token"
 
-DISCOVERY_URL  = "https://mcp.jira.tools.sap/.well-known/oauth-authorization-server"
-TOKEN_ENDPOINT = "https://mcp.jira.tools.sap/token"
-AUTH_ENDPOINT  = "https://mcp.jira.tools.sap/authorize"
-CLIENT_ID      = "jira-macos-notifier"
+
+def _read_config() -> dict:
+    config_path = os.path.expanduser("~/.config/jira-server-notifier/config.json")
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _mcp_base_from_jira_url(jira_url: str) -> str:
+    """Derive MCP server base URL by prepending 'mcp.' to the Jira host."""
+    parsed = urllib.parse.urlparse(jira_url)
+    if not parsed.netloc:
+        return ""
+    return urllib.parse.urlunparse((parsed.scheme, f"mcp.{parsed.netloc}", "", "", "", ""))
+
+
+_cfg       = _read_config()
+_jira_url  = _cfg.get("jira_url", "").rstrip("/")
+_mcp_base  = _cfg.get("mcp_url", _mcp_base_from_jira_url(_jira_url))
+
+DISCOVERY_URL  = f"{_mcp_base}/.well-known/oauth-authorization-server" if _mcp_base else ""
+TOKEN_ENDPOINT = f"{_mcp_base}/token" if _mcp_base else ""
+AUTH_ENDPOINT  = f"{_mcp_base}/authorize" if _mcp_base else ""
+CLIENT_ID      = "jira-server-notifier"
 REDIRECT_URI   = "http://127.0.0.1:8765/callback"
 
 HEADERS = {
@@ -41,6 +63,8 @@ class NetworkAuthError(Exception):
 def _discover_endpoints():
     """Fetch OAuth discovery doc and update endpoints if available."""
     global AUTH_ENDPOINT, TOKEN_ENDPOINT
+    if not DISCOVERY_URL:
+        return
     try:
         req = urllib.request.Request(DISCOVERY_URL)
         for k, v in HEADERS.items():
@@ -78,7 +102,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
                 <html><body style="font-family:-apple-system,sans-serif;text-align:center;padding:50px;background:#f5f5f7">
                 <div style="background:white;border-radius:12px;padding:40px;display:inline-block;box-shadow:0 4px 12px rgba(0,0,0,.1)">
                 <h2 style="color:#34c759">&#10003; Authorization Successful!</h2>
-                <p style="color:#666">You may now close this tab and return to Jira Notifier.</p>
+                <p style="color:#666">You may now close this tab and return to Jira Server Notifier.</p>
                 </div></body></html>""")
             else:
                 _CallbackHandler.error = params.get("error", ["unknown"])[0]
@@ -195,7 +219,15 @@ def get_valid_access_token() -> str:
 
 
 def interactive_login() -> bool:
+    if not _jira_url:
+        print("✗ No Jira Server URL configured.")
+        print("  Set jira_url in ~/.config/jira-server-notifier/config.json or via Preferences.")
+        return False
     _discover_endpoints()
+    if not AUTH_ENDPOINT or not TOKEN_ENDPOINT:
+        print(f"✗ Could not determine OAuth endpoints for {_jira_url}.")
+        print("  Optionally set mcp_url in config.json to override.")
+        return False
     verifier, challenge = _pkce_pair()
     state = secrets.token_hex(16)
 
@@ -210,10 +242,12 @@ def interactive_login() -> bool:
     })
     auth_url = f"{AUTH_ENDPOINT}?{params}"
 
+    host = urllib.parse.urlparse(_jira_url).netloc or _jira_url
     print("\n=======================================================")
-    print(" SAP Jira Notifier — OAuth 2.1 PKCE Authentication")
+    print(" Jira Server Notifier — OAuth 2.1 PKCE Authentication")
     print("=======================================================")
-    print(f"Opening browser for SAP SSO login...")
+    print(f"Connecting to: {host}")
+    print(f"Opening browser for login...")
     print(f"URL: {auth_url}\n")
 
     _CallbackHandler.auth_code = None

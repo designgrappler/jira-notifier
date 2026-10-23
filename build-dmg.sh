@@ -1,10 +1,10 @@
 #!/bin/bash
-# Builds Jira Notifier.app and packages it into a distributable DMG.
+# Builds Jira Server Notifier.app and packages it into a distributable DMG.
 # Usage: ./build-dmg.sh
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="Jira Notifier"
+APP_NAME="Jira Server Notifier"
 VERSION="1.0"
 APP_BUNDLE="$SCRIPT_DIR/build/${APP_NAME}.app"
 DMG_DIR="$SCRIPT_DIR/dist"
@@ -30,11 +30,11 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 # ── 3. Compile Swift binary ───────────────────────────────────────────────────
 swiftc \
     -O \
-    -module-name JiraNotifier \
+    -module-name JiraServerNotifier \
     -framework Cocoa \
     -framework UserNotifications \
     "$SCRIPT_DIR/menubar/main.swift" \
-    -o "$APP_BUNDLE/Contents/MacOS/JiraNotifier" \
+    -o "$APP_BUNDLE/Contents/MacOS/JiraServerNotifier" \
     2>&1 || fail "Swift compilation failed"
 ok "Swift binary compiled"
 

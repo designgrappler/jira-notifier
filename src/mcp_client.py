@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-MCP JSON-RPC + Jira REST API client for jira.tools.sap.
+MCP JSON-RPC + Jira REST API client.
 Attempts the MCP endpoint first; falls back to the Jira REST search API.
+Endpoints are derived from jira_url (and optional mcp_url) in
+~/.config/jira-server-notifier/config.json.
 """
 
+import os
 import sys
 import json
 import logging
@@ -12,11 +15,28 @@ import urllib.parse
 import urllib.error
 from auth import get_valid_access_token, AuthExpiredError, NetworkAuthError
 
-MCP_ENDPOINT = "https://mcp.jira.tools.sap/mcp"
-REST_ENDPOINTS = [
-    "https://jira.tools.sap/rest/api/2/search",
-    "https://jira.tools.sap/rest/api/latest/search",
-]
+
+def _load_endpoints() -> tuple:
+    """Load Jira URLs from config and derive MCP/REST endpoints."""
+    config_path = os.path.expanduser("~/.config/jira-server-notifier/config.json")
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception:
+        cfg = {}
+    jira_url = cfg.get("jira_url", "").rstrip("/")
+    parsed   = urllib.parse.urlparse(jira_url)
+    mcp_host = f"mcp.{parsed.netloc}" if parsed.netloc else ""
+    mcp_base = urllib.parse.urlunparse((parsed.scheme, mcp_host, "", "", "", "")) if mcp_host else ""
+    mcp_url  = cfg.get("mcp_url", mcp_base)
+    rest_endpoints = [
+        f"{jira_url}/rest/api/2/search",
+        f"{jira_url}/rest/api/latest/search",
+    ] if jira_url else []
+    return (f"{mcp_url}/mcp" if mcp_url else ""), rest_endpoints
+
+
+MCP_ENDPOINT, REST_ENDPOINTS = _load_endpoints()
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",

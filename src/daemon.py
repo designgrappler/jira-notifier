@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Polling worker for Jira Notifier.
+Polling worker for Jira Server Notifier.
 Run with --check-once for a single poll (invoked by the Swift menu bar app).
 Run without arguments for a continuous background loop.
 Exit codes: 0=ok, 2=auth expired, 3=offline, 1=other error.
@@ -22,7 +22,7 @@ from change_tracker import detect_changes, save_current_state, load_previous_sta
 from notifier import notify_changes, notify_auth_disconnected, notify_offline
 from auth import AuthExpiredError, NetworkAuthError
 
-CONFIG_DIR    = os.path.expanduser("~/.config/jira-notifier")
+CONFIG_DIR    = os.path.expanduser("~/.config/jira-server-notifier")
 CONFIG_FILE   = os.path.join(CONFIG_DIR, "config.json")
 STATUS_FILE   = os.path.join(CONFIG_DIR, "status.json")
 CHANGES_FILE  = os.path.join(CONFIG_DIR, "changes.json")

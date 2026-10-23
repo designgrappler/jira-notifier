@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""macOS notification dispatch for Jira Notifier.
+"""macOS notification dispatch for Jira Server Notifier.
 
 Notifications are handled by the Swift app via UNUserNotificationCenter.
 These functions are intentionally no-ops to avoid duplicate system alerts.

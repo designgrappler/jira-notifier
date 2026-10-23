@@ -48,9 +48,10 @@ private class FlippedClipView: NSClipView {
 class UpdatesPanelController: NSObject {
     private var panel: NSPanel?
     private var eventMonitor: Any?
+    var jiraURL: String = ""
 
     static let changesPath: String = {
-        "\(FileManager.default.homeDirectoryForCurrentUser.path)/.config/jira-notifier/changes.json"
+        "\(FileManager.default.homeDirectoryForCurrentUser.path)/.config/jira-server-notifier/changes.json"
     }()
 
     func loadChanges() -> [[String: Any]] {
@@ -67,7 +68,8 @@ class UpdatesPanelController: NSObject {
         try? "[]".write(toFile: Self.changesPath, atomically: true, encoding: .utf8)
     }
 
-    func show(near statusItem: NSStatusItem, projectKey: String = "Jira") {
+    func show(near statusItem: NSStatusItem, projectKey: String = "Jira", jiraURL: String = "") {
+        self.jiraURL = jiraURL
         let changes = loadChanges()
         dismiss()
         buildPanel(changes: changes, statusItem: statusItem, projectKey: projectKey)
@@ -84,7 +86,7 @@ class UpdatesPanelController: NSObject {
     var isVisible: Bool { panel != nil }
     var onSettingsTapped: (() -> Void)?
 
-    private static let heightKey     = "JiraNotifierPanelHeight"
+    private static let heightKey     = "JiraServerNotifierPanelHeight"
     private static let defaultH: CGFloat = 420
     private static let minH: CGFloat     = 200
     private static let maxH: CGFloat     = 700
@@ -419,13 +421,13 @@ class UpdatesPanelController: NSObject {
 
     @objc private func rowClicked(_ gesture: NSClickGestureRecognizer) {
         guard let key = gesture.view?.identifier?.rawValue,
-              let url = URL(string: "https://jira.tools.sap/browse/\(key)") else { return }
+              let url = URL(string: "\(jiraURL)/browse/\(key)") else { return }
         NSWorkspace.shared.open(url)
     }
 
     @objc private func keyTapped(_ sender: NSButton) {
         let key = sender.identifier?.rawValue ?? sender.title
-        if let url = URL(string: "https://jira.tools.sap/browse/\(key)") {
+        if let url = URL(string: "\(jiraURL)/browse/\(key)") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -433,7 +435,7 @@ class UpdatesPanelController: NSObject {
     @objc private func openAllTapped() {
         for change in loadChanges() {
             if let key = change["key"] as? String,
-               let url = URL(string: "https://jira.tools.sap/browse/\(key)") {
+               let url = URL(string: "\(jiraURL)/browse/\(key)") {
                 NSWorkspace.shared.open(url)
             }
         }
@@ -458,12 +460,14 @@ extension Notification.Name {
 
 class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
+    private var jiraURLField: NSTextField!
     private var projectKeyField: NSTextField!
     private var intervalField: NSTextField!
-    var onSave: ((String, Double) -> Void)?
+    var onSave: ((String, String, Double) -> Void)?
 
-    func show(currentProject: String, currentInterval: Double) {
+    func show(currentURL: String, currentProject: String, currentInterval: Double) {
         if window == nil { buildWindow() }
+        jiraURLField.stringValue = currentURL
         projectKeyField.stringValue = currentProject
         intervalField.stringValue = String(Int(currentInterval))
         NSApp.activate(ignoringOtherApps: true)
@@ -473,11 +477,11 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     private func buildWindow() {
         let w = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 180),
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )
-        w.title = "Jira Notifier — Preferences"
+        w.title = "Jira Server Notifier — Preferences"
         w.center()
         w.isReleasedWhenClosed = false
         w.delegate = self
@@ -498,10 +502,12 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             return f
         }
 
-        let projectLabel = label("Jira Project Key:", y: 118)
-        projectKeyField  = field(placeholder: "e.g. FUN", y: 118)
-        let intervalLabel = label("Check Interval (min):", y: 76)
-        intervalField     = field(placeholder: "5", y: 76)
+        let urlLabel      = label("Jira Server URL:",       y: 178)
+        jiraURLField      = field(placeholder: "https://jira.yourcompany.com", y: 178)
+        let projectLabel  = label("Jira Project Key:",      y: 128)
+        projectKeyField   = field(placeholder: "e.g. FUN",  y: 128)
+        let intervalLabel = label("Check Interval (min):",  y: 78)
+        intervalField     = field(placeholder: "5",          y: 78)
 
         let save = NSButton(title: "Save", target: self, action: #selector(saveClicked))
         save.frame = NSRect(x: 260, y: 22, width: 80, height: 32)
@@ -511,18 +517,26 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         cancel.frame = NSRect(x: 170, y: 22, width: 80, height: 32)
         cancel.bezelStyle = .rounded; cancel.keyEquivalent = "\u{1b}"
 
-        for view in [projectLabel, projectKeyField, intervalLabel, intervalField,
-                     save, cancel] as [NSView] { v.addSubview(view) }
+        for view in [urlLabel, jiraURLField, projectLabel, projectKeyField,
+                     intervalLabel, intervalField, save, cancel] as [NSView] { v.addSubview(view) }
     }
 
     @objc private func saveClicked() {
-        let key = projectKeyField.stringValue.trimmingCharacters(in: .whitespaces).uppercased()
+        let url      = jiraURLField.stringValue.trimmingCharacters(in: .whitespaces)
+        let key      = projectKeyField.stringValue.trimmingCharacters(in: .whitespaces).uppercased()
         let interval = max(1.0, Double(intervalField.stringValue.trimmingCharacters(in: .whitespaces)) ?? 5.0)
+        guard !url.isEmpty, URL(string: url) != nil else {
+            let alert = NSAlert()
+            alert.messageText = "Please enter a valid Jira Server URL."
+            alert.informativeText = "Example: https://jira.yourcompany.com"
+            alert.runModal()
+            return
+        }
         guard !key.isEmpty else {
             let alert = NSAlert(); alert.messageText = "Project key cannot be empty."; alert.runModal()
             return
         }
-        onSave?(key, interval)
+        onSave?(url, key, interval)
         window?.orderOut(nil)
     }
     @objc private func cancelClicked() { window?.orderOut(nil) }
@@ -537,6 +551,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     private var projectKey: String = "FUN"
     private var checkIntervalMinutes: Double = 5.0
+    private var jiraURL: String = ""
     private var isChecking = false
     private var lastCheckDate: Date?
     private var connectionStatus = "connected"
@@ -551,7 +566,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private lazy var updatesController  = UpdatesPanelController()
 
     private let configDir: String = {
-        "\(FileManager.default.homeDirectoryForCurrentUser.path)/.config/jira-notifier"
+        "\(FileManager.default.homeDirectoryForCurrentUser.path)/.config/jira-server-notifier"
     }()
     private var scriptsDir: String {
         Bundle.main.resourcePath ?? configDir
@@ -570,7 +585,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             self, selector: #selector(onChangesCleared),
             name: .jiraChangesCleared, object: nil
         )
-        if hasToken() {
+        if jiraURL.isEmpty {
+            setIcon(state: "auth_expired")
+            statusMenuItem.title = "Status: Setup Required 🔴"
+            showSetupRequired()
+        } else if hasToken() {
             setIcon(state: "checking")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.performCheck(manual: false)
@@ -591,7 +610,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private func hasToken() -> Bool {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        proc.arguments = ["find-generic-password", "-s", "com.sap.jira-notifier", "-a", "oauth_token", "-w"]
+        proc.arguments = ["find-generic-password", "-s", "io.github.jiraservernotifier", "-a", "oauth_token", "-w"]
         proc.standardOutput = Pipe(); proc.standardError = Pipe()
         try? proc.run(); proc.waitUntilExit()
         return proc.terminationStatus == 0
@@ -599,12 +618,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     private func showFirstRunOnboarding() {
         let alert = NSAlert()
-        alert.messageText = "Connect to SAP Jira"
-        alert.informativeText = "Jira Notifier needs to connect to your SAP Jira account to monitor updates.\n\nClick Connect to open a browser and sign in."
+        let host = URL(string: jiraURL)?.host ?? "your Jira server"
+        alert.messageText = "Connect to Jira"
+        alert.informativeText = "Jira Server Notifier needs to connect to \(host) to monitor updates.\n\nClick Connect to open a browser and sign in."
         alert.addButton(withTitle: "Connect")
         alert.addButton(withTitle: "Later")
         NSApp.activate(ignoringOtherApps: true)
         if alert.runModal() == .alertFirstButtonReturn { reconnectClicked() }
+    }
+
+    private func showSetupRequired() {
+        let alert = NSAlert()
+        alert.messageText = "Set Up Jira Server Notifier"
+        alert.informativeText = "Enter your Jira Server URL in Preferences to get started."
+        alert.addButton(withTitle: "Open Preferences")
+        alert.addButton(withTitle: "Later")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn { openPrefsClicked() }
     }
 
     // MARK: Notifications
@@ -632,11 +662,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     private func buildMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.autosaveName = "com.sap.jira-notifier.statusItem"
+        statusItem.autosaveName = "io.github.jiraservernotifier.statusItem"
         setIcon(state: "connected")
         menu = NSMenu()
 
-        let title = NSMenuItem(title: "Jira Notifier", action: nil, keyEquivalent: "")
+        let title = NSMenuItem(title: "Jira Server Notifier", action: nil, keyEquivalent: "")
         title.isEnabled = false
         menu.addItem(title)
 
@@ -684,7 +714,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "Quit Jira Notifier", action: #selector(quitClicked), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit Jira Server Notifier", action: #selector(quitClicked), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
 
@@ -719,22 +749,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             projectMenuItem.title = "Project: \(projectKey)"; return
         }
-        if let k = json["project_key"] as? String, !k.isEmpty { projectKey = k }
+        if let u = json["jira_url"]        as? String, !u.isEmpty { jiraURL = u.trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
+        if let k = json["project_key"]     as? String, !k.isEmpty { projectKey = k }
         if let i = json["interval_minutes"] as? Double { checkIntervalMinutes = i }
         else if let i = json["interval_minutes"] as? Int { checkIntervalMinutes = Double(i) }
         projectMenuItem.title = "Project: \(projectKey)"
     }
 
-    private func saveConfig(key: String, interval: Double) {
+    private func saveConfig(url: String, key: String, interval: Double) {
         try? FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
         let data = try? JSONSerialization.data(
-            withJSONObject: ["project_key": key, "interval_minutes": interval],
+            withJSONObject: ["jira_url": url, "project_key": key, "interval_minutes": interval],
             options: .prettyPrinted
         )
         try? data?.write(to: URL(fileURLWithPath: configFile))
-        projectKey = key; checkIntervalMinutes = interval
+        jiraURL = url; projectKey = key; checkIntervalMinutes = interval
         projectMenuItem.title = "Project: \(projectKey)"
-        scheduleTimer()
+        if !hasToken() {
+            showFirstRunOnboarding()
+        } else {
+            scheduleTimer()
+            performCheck(manual: false)
+        }
     }
 
     // MARK: Polling
@@ -803,18 +839,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             if changes > 0 {
                 showUpdatesPanel()           // auto-open panel when new changes arrive
             } else if manual {
-                sendNotification(title: "Jira Notifier", body: "Project \(projectKey) is up to date.")
+                sendNotification(title: "Jira Server Notifier", body: "Project \(projectKey) is up to date.")
             }
         case "auth_expired":
             statusMenuItem.title = "Status: Session Expired 🔴"
             setIcon(state: "auth_expired")
-            sendNotification(title: "Jira Notifier: Session Expired",
-                             body: "Your SAP Jira session has expired. Use Reconnect in the menu bar.")
+            sendNotification(title: "Jira Server Notifier: Session Expired",
+                             body: "Your Jira session has expired. Use Reconnect in the menu bar.")
         case "offline":
             statusMenuItem.title = "Status: Offline ⚠️"
             setIcon(state: "offline")
-            sendNotification(title: "Jira Notifier: Offline",
-                             body: "Cannot reach jira.tools.sap. Check your VPN connection.")
+            let host = URL(string: jiraURL)?.host ?? "your Jira server"
+            sendNotification(title: "Jira Server Notifier: Offline",
+                             body: "Cannot reach \(host). Check your network connection.")
         default:
             statusMenuItem.title = "Status: Error ⚠️"
             setIcon(state: "error")
@@ -828,7 +865,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             self.statusItem.button?.performClick(nil)
             self.statusItem.menu = nil
         }
-        updatesController.show(near: statusItem, projectKey: projectKey)
+        updatesController.show(near: statusItem, projectKey: projectKey, jiraURL: jiraURL)
     }
 
     // MARK: Menu Actions
@@ -868,7 +905,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     self.reconnectMenuItem.isEnabled = true
                     self.reconnectMenuItem.title = "Reconnect / Re-authenticate..."
                     if process.terminationStatus == 0 {
-                        self.sendNotification(title: "Jira Notifier", body: "Successfully connected to SAP Jira.")
+                        self.sendNotification(title: "Jira Server Notifier", body: "Successfully connected to Jira.")
                         self.scheduleTimer()
                         self.performCheck(manual: false)
                     } else {
@@ -887,12 +924,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     @objc private func openPrefsClicked() {
-        prefsController.onSave = { [weak self] key, interval in self?.saveConfig(key: key, interval: interval) }
-        prefsController.show(currentProject: projectKey, currentInterval: checkIntervalMinutes)
+        prefsController.onSave = { [weak self] url, key, interval in self?.saveConfig(url: url, key: key, interval: interval) }
+        prefsController.show(currentURL: jiraURL, currentProject: projectKey, currentInterval: checkIntervalMinutes)
     }
 
     @objc private func openJiraClicked() {
-        guard let url = URL(string: "https://jira.tools.sap/browse/\(projectKey)") else { return }
+        guard let url = URL(string: "\(jiraURL)/browse/\(projectKey)") else { return }
         NSWorkspace.shared.open(url)
     }
 

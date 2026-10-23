@@ -8,7 +8,7 @@ import os
 import json
 from typing import Tuple
 
-STATE_FILE = os.path.expanduser("~/.config/jira-notifier/state.json")
+STATE_FILE = os.path.expanduser("~/.config/jira-server-notifier/state.json")
 
 
 def load_previous_state() -> dict:

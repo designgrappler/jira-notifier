@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.sap.jira-notifier</string>
+    <string>io.github.jiraservernotifier</string>
     <key>CFBundleName</key>
-    <string>Jira Notifier</string>
+    <string>Jira Server Notifier</string>
     <key>CFBundleDisplayName</key>
-    <string>Jira Notifier</string>
+    <string>Jira Server Notifier</string>
     <key>CFBundleExecutable</key>
-    <string>JiraNotifier</string>
+    <string>JiraServerNotifier</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
     <key>CFBundleShortVersionString</key>

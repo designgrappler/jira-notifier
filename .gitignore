@@ -5,3 +5,6 @@ dist/
 __pycache__/
 *.pyc
 .DS_Store
+.worktrees/
+.claude/settings.local.json
+docs/context/connectors.md

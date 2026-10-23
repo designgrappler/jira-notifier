@@ -1,5 +1,5 @@
 #!/bin/bash
-# Notarizes and staples the Jira Notifier DMG.
+# Notarizes and staples the Jira Server Notifier DMG.
 # Usage: ./notarize.sh <apple-id> <team-id> <app-specific-password>
 #
 # Example:
@@ -7,7 +7,7 @@
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="Jira Notifier"
+APP_NAME="Jira Server Notifier"
 VERSION="1.0"
 DMG_PATH="$SCRIPT_DIR/dist/${APP_NAME}-${VERSION}.dmg"
 
